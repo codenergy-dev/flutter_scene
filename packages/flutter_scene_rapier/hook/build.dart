@@ -143,7 +143,7 @@ Future<Uri> _buildFromSource(
   await _ensureRustTarget(triple);
 
   final nativeDir = Directory.fromUri(input.packageRoot.resolve('native/'));
-  final environment = _cargoEnvironment(code, triple);
+  final environment = await _cargoEnvironment(code, triple);
   await _runCargo(nativeDir, triple, environment);
 
   final libFileName = code.targetOS.dylibFileName(_nativeLibraryName);
@@ -205,7 +205,10 @@ Future<void> _ensureRustTarget(String triple) async {
 
 // Builds the extra environment variables cargo needs for the target.
 // The parent environment is inherited; these entries are layered on top.
-Map<String, String> _cargoEnvironment(CodeConfig code, String triple) {
+Future<Map<String, String>> _cargoEnvironment(
+  CodeConfig code,
+  String triple,
+) async {
   final environment = <String, String>{};
 
   if (code.targetOS == OS.iOS) {
@@ -215,6 +218,22 @@ Map<String, String> _cargoEnvironment(CodeConfig code, String triple) {
     environment['IPHONEOS_DEPLOYMENT_TARGET'] = '${code.iOS.targetVersion}';
   } else if (code.targetOS == OS.macOS) {
     environment['MACOSX_DEPLOYMENT_TARGET'] = '${code.macOS.targetVersion}';
+    // Point the toolchain at an SDK. Inside an Xcode build the environment
+    // handed to this hook carries Xcode's toolchain at the front of PATH and
+    // no SDKROOT, so cargo's `cc` is Xcode's clang rather than the
+    // /usr/bin/cc shim. That clang has no built-in sysroot, and every link
+    // fails with "ld: library 'System' not found", starting with the host
+    // build scripts (proc-macro2, serde, quote) long before the cdylib. The
+    // shim in a normal shell finds the SDK on its own, which is why the same
+    // `cargo build` succeeds from a terminal and fails under `flutter build`.
+    //
+    // Only targets without a prebuilt reach this code, which today means
+    // x86_64 macOS: an Apple Silicon host downloads its dylib and never runs
+    // cargo, so the trap stays invisible there.
+    final sdkRoot = Platform.environment['SDKROOT'] ?? await _macosSdkPath();
+    if (sdkRoot != null) {
+      environment['SDKROOT'] = sdkRoot;
+    }
   } else if (code.targetOS == OS.android) {
     // Link with the NDK's clang driver (it locates its own sysroot), and
     // tell it the ABI and API level through the clang target triple. The
@@ -245,6 +264,25 @@ Map<String, String> _cargoEnvironment(CodeConfig code, String triple) {
   }
 
   return environment;
+}
+
+// The active macOS SDK path, from xcrun. Returns null when it cannot be
+// resolved (no Xcode, no Command Line Tools, xcrun missing from PATH), so a
+// build with an unusual toolchain setup runs unchanged and surfaces its own
+// error instead of one invented here.
+Future<String?> _macosSdkPath() async {
+  try {
+    final result = await Process.run('xcrun', [
+      '--sdk',
+      'macosx',
+      '--show-sdk-path',
+    ]);
+    if (result.exitCode != 0) return null;
+    final path = (result.stdout as String).trim();
+    return path.isEmpty ? null : path;
+  } on ProcessException {
+    return null;
+  }
 }
 
 // The clang `--target` ABI string for an Android Rust triple. It matches
