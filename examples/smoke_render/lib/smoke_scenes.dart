@@ -1956,6 +1956,89 @@ final List<SmokeScene> kSmokeScenes = <SmokeScene>[
     );
   }),
 
+  // The two layouts that break a line into more than one: a wrap running out
+  // of room and starting a new run, and a grid dividing the room into cells
+  // from a delegate. Catches a run breaking in the wrong place, a cell grid
+  // that stops dividing the space it was given, and the grid's lazy window.
+  SmokeScene('layout3d_wrap_grid', () {
+    final scene = Scene();
+    Node piece(Geometry geometry, vm.Vector4 color) => Node(
+      mesh: Mesh(
+        geometry,
+        PhysicallyBasedMaterial()
+          ..baseColorFactor = color
+          ..metallicFactor = 0.0
+          ..roughnessFactor = 0.4
+          ..vertexColorWeight = 0.0,
+      ),
+    );
+    final unitCube = CuboidGeometry(vm.Vector3.all(1));
+    final ball = SphereGeometry(radius: 0.5);
+    Layout3d sized(double extent, Node content) => SizedBox3d.cube(
+      extent,
+      child: NodeBox3d(content: content, fit: BoxFit3d.contain),
+    );
+
+    // Pieces of three different widths, so the runs break at different
+    // counts rather than falling into a regular grid by accident.
+    final wrap = Layout3dSurface(
+      constraints: Constraints3d.tight(const Size3d(1.1, 1.2, 0.3)),
+      child: Wrap3d(
+        spacing: 0.06,
+        runSpacing: 0.08,
+        crossAxisAlignment: WrapCrossAlignment3d.center,
+        children: [
+          for (var index = 0; index < 7; index++)
+            sized(
+              0.2 + (index % 3) * 0.1,
+              piece(
+                index.isEven ? unitCube : ball,
+                vm.Vector4(0.95, 0.45 + (index % 3) * 0.16, 0.30, 1.0),
+              ),
+            ),
+        ],
+      ),
+    )..flush();
+    wrap.plane.position = vm.Vector3(-0.75, 0.1, 0);
+    scene.add(wrap.plane);
+
+    // Three cells across, scrolled off zero. Five rows of content in a
+    // window that holds a little over three, so the last row falls outside
+    // it and the lazy builder never builds those cells at all.
+    final grid = Layout3dSurface(
+      constraints: Constraints3d.tight(const Size3d(1.1, 1.2, 0.3)),
+      child: GridView3d.builder(
+        gridDelegate: const Grid3dDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 0.05,
+          mainAxisSpacing: 0.05,
+        ),
+        controller: Scroll3dController(initialOffset: 0.2),
+        itemCount: 15,
+        itemBuilder: (index) => NodeBox3d(
+          content: piece(
+            index.isEven ? ball : unitCube,
+            vm.Vector4(0.35, 0.55 + (index % 4) * 0.1, 0.9, 1.0),
+          ),
+          fit: BoxFit3d.contain,
+        ),
+      ),
+    )..flush();
+    grid.plane.position = vm.Vector3(0.75, 0.1, 0);
+    scene.add(grid.plane);
+
+    return (
+      scene: scene,
+      camera: PerspectiveCamera(
+        // Far enough back that both planes clear the frame edges, so a
+        // change in cell size shows up in the diff instead of sliding out
+        // of shot.
+        position: vm.Vector3(0, 0.15, 3.7),
+        target: vm.Vector3(0, 0.05, 0),
+      ),
+    );
+  }),
+
   SmokeScene('instance_attributes', () {
     final scene = Scene();
     scene.add(
