@@ -15,7 +15,12 @@ import 'package:flutter_scene/scene.dart'
         TorusGeometry;
 import 'package:flutter_scene_layout3d/flutter_scene_layout3d.dart';
 import 'package:flutter_scene_layout3d/widgets.dart'
-    show SceneLayout3d, SceneListView3d, SceneNodeBox3d, SceneSizedBox3d;
+    show
+        Layout3dController,
+        SceneLayout3d,
+        SceneListView3d,
+        SceneNodeBox3d,
+        SceneSizedBox3d;
 import 'package:vector_math/vector_math.dart' as vm;
 
 import 'example_settings.dart';
@@ -28,6 +33,11 @@ import 'example_settings.dart';
 /// same protocol on the ground plane, where the basis makes layout's "down"
 /// run away from the camera. Right, a scrolling list described declaratively
 /// with the widget layer.
+///
+/// All three are hit-testable: the pointer is turned into a camera ray and
+/// walked down the layout tree, so hovering names what is under the cursor
+/// and dragging the list scrolls it, even while the panel it sits beside is
+/// turning.
 class ExampleLayout3d extends StatefulWidget {
   const ExampleLayout3d({super.key});
 
@@ -52,14 +62,28 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
   late final Layout3dSurface _ground;
   final Scroll3dController _scroll = Scroll3dController();
 
+  /// Reaches the surface the declarative list is laid out on, which the
+  /// widget layer owns.
+  final Layout3dController _listSurface = Layout3dController();
+
+  Layout3dPointer? _listPointer;
+
+  /// What the cursor is over, by layout name.
+  String? _under;
+
+  /// Set once the list has been dragged, which retires the clock that scrolls
+  /// it for show.
+  bool _scrolledByHand = false;
+
   double _time = 0.0;
 
   /// Content sized by the layout rather than by itself: the box is fixed and
   /// [BoxFit3d.contain] scales the model down into it.
-  Layout3d _sized(double extent, Node content) => SizedBox3d.cube(
-    extent,
-    child: NodeBox3d(content: content, fit: BoxFit3d.contain),
-  );
+  Layout3d _sized(double extent, Node content, {String? name}) =>
+      SizedBox3d.cube(
+        extent,
+        child: NodeBox3d(content: content, fit: BoxFit3d.contain, name: name),
+      );
 
   Node _piece(Geometry geometry, vm.Vector4 color, {double metallic = 0.0}) {
     return Node(
@@ -124,10 +148,12 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
                     _sized(
                       0.36,
                       _piece(_unitCube, vm.Vector4(0.85, 0.35, 0.25, 1.0)),
+                      name: 'cube',
                     ),
                     _sized(
                       0.36,
                       _piece(_ball, vm.Vector4(0.30, 0.62, 0.90, 1.0)),
+                      name: 'sphere',
                     ),
                     _sized(
                       0.36,
@@ -136,6 +162,7 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
                         vm.Vector4(0.95, 0.78, 0.30, 1.0),
                         metallic: 0.8,
                       ),
+                      name: 'torus',
                     ),
                   ],
                 ),
@@ -185,6 +212,7 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
             child: NodeBox3d(
               content: _piece(_ball, vm.Vector4(0.95, 0.30, 0.45, 1.0)),
               fit: BoxFit3d.contain,
+              name: 'badge',
             ),
           ),
         ],
@@ -214,6 +242,7 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
               _sized(
                 0.3 + index * 0.12,
                 _piece(_ball, vm.Vector4(0.35 + index * 0.15, 0.55, 0.85, 1.0)),
+                name: 'ground ${index + 1}',
               ),
           ],
         ),
@@ -223,8 +252,85 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
     return surface;
   }
 
+  /// The pointer onto the list, made on first use: the declarative surface
+  /// only exists once the widget layer has built it.
+  Layout3dPointer? _listPointerFor(Layout3dSurface? surface) {
+    if (surface == null) return null;
+    final held = _listPointer;
+    if (held != null && identical(held.surface, surface)) return held;
+    return Layout3dPointer(surface);
+  }
+
+  vm.Ray _rayAt(Offset position, Size viewSize) =>
+      camera.screenPointToRay(position, viewSize);
+
+  void _handleDown(Offset position, Size viewSize) {
+    _listPointer = _listPointerFor(_listSurface.surface);
+    if (_listPointer?.down(_rayAt(position, viewSize)) ?? false) {
+      _scrolledByHand = true;
+    }
+  }
+
+  void _handleMove(Offset position, Size viewSize) {
+    _listPointer?.move(_rayAt(position, viewSize));
+    _reportHover(position, viewSize);
+  }
+
+  /// Names the deepest layout under the cursor, across all three surfaces.
+  ///
+  /// Each surface is asked in turn and the first answer wins; they stand well
+  /// apart here, so there is nothing to sort by distance.
+  void _reportHover(Offset position, Size viewSize) {
+    final ray = _rayAt(position, viewSize);
+    String? found;
+    for (final surface in <Layout3dSurface?>[
+      _panel,
+      _ground,
+      _listSurface.surface,
+    ]) {
+      final target = surface?.hitTestRay(ray).target;
+      if (target != null) {
+        found = target.node.name;
+        break;
+      }
+    }
+    if (found != _under) setState(() => _under = found);
+  }
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewSize = constraints.biggest;
+        return Listener(
+          onPointerDown: (event) => _handleDown(event.localPosition, viewSize),
+          onPointerMove: (event) => _handleMove(event.localPosition, viewSize),
+          onPointerUp: (_) => _listPointer?.up(),
+          onPointerCancel: (_) => _listPointer?.up(),
+          onPointerHover: (event) =>
+              _reportHover(event.localPosition, viewSize),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildScene(),
+              Positioned(
+                left: 16,
+                bottom: 16,
+                child: Text(
+                  _under == null
+                      ? 'Drag the list to scroll it'
+                      : 'Pointing at: $_under',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScene() {
     return SceneView(
       scene,
       camera: camera,
@@ -232,6 +338,7 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
         // The declarative layer: the same layout objects, described in a
         // build method and reconciled through the element tree.
         SceneLayout3d(
+          controller: _listSurface,
           size: const Size3d(1.15, 1.7, 0.3),
           position: vm.Vector3(2.2, 1.35, 0),
           child: SceneListView3d(
@@ -264,10 +371,13 @@ class _ExampleLayout3dState extends State<ExampleLayout3d> {
           math.sin(_time * 0.4) * 0.5,
         );
 
-        // No input layer yet, so the list is scrolled from the clock; the
-        // controller clamps to the range the list measured.
-        final sweep = (math.sin(_time * 0.5) + 1) / 2;
-        _scroll.jumpTo(_scroll.maxScrollExtent * sweep);
+        // The list scrolls itself until someone takes hold of it, so the
+        // example shows movement before it is touched and then hands the
+        // position over to the drag for good.
+        if (!_scrolledByHand) {
+          final sweep = (math.sin(_time * 0.5) + 1) / 2;
+          _scroll.jumpTo(_scroll.maxScrollExtent * sweep);
+        }
 
         // Cheap when nothing is dirty, so the imperative surfaces are
         // simply flushed every frame.
