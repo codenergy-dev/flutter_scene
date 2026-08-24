@@ -58,6 +58,7 @@ jobs:
           - packages/scene
           - packages/flutter_scene
           - packages/flutter_scene_net
+          - packages/flutter_scene_layout3d
     steps:
       - uses: actions/checkout@v7
       - name: Set up Flutter

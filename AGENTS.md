@@ -15,6 +15,7 @@ The ecosystem is organized around `scene`, an engine-agnostic contract. Renderin
 | `flutter_scene_rapier` | Physics backend over Rapier (prebuilt native binaries plus a wasm module). Implements `package:scene/physics.dart`. |
 | `flutter_scene_box3d` | Physics backend over box3d. Also implements the `scene` physics contract. |
 | `flutter_scene_net` | Networking: replication, client-side prediction, and reconciliation. |
+| `flutter_scene_layout3d` | Flutter's box layout protocol in three dimensions: constraints down, sizes up, the parent positions the child, arranged on a freely transformable plane. `Container3d`, `Row3d`/`Column3d`, `Stack3d`, `ListView3d`, and a declarative widget layer. |
 | `flutter_scene_fmod` | Audio backend over FMOD (needs a user-supplied FMOD SDK). |
 | `flutter_scene_soloud` | Audio backend over SoLoud (via `flutter_soloud`). |
 | `flutter_scene_editor`, `flutter_scene_mcp` | The Flutter Scene Editor, a distributed desktop application (not a pub.dev library, you run it rather than depend on it), and its MCP server for agent-driven editing. In active development. |
