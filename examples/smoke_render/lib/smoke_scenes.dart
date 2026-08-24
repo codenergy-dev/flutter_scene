@@ -16,6 +16,7 @@ import 'package:flutter_scene/src/texture/half_float.dart';
 import 'package:flutter_scene/src/texture/ktx2/ktx2.dart';
 // ignore: implementation_imports
 import 'package:flutter_scene/src/texture/ktx2_image.dart';
+import 'package:flutter_scene_layout3d/flutter_scene_layout3d.dart';
 import 'package:smoke_render/synthetic_morph_glb.dart';
 import 'package:vector_math/vector_math.dart' as vm;
 
@@ -1745,6 +1746,216 @@ final List<SmokeScene> kSmokeScenes = <SmokeScene>[
   // too; they bind no instance data and read zero (the documented contract),
   // so every cube's shadow sits in the flat unlifted grid while the cubes
   // themselves stair-step above it.
+  // A layout surface from flutter_scene_layout3d, laid out once and mounted
+  // as an ordinary node subtree: a slab pinned to the plane's back face, a
+  // column of pieces standing in front of it, a two-to-one flex bar, and a
+  // badge pinned to a corner. Catches "the layout produced nothing" and, via
+  // the visual diff, any change in where the protocol puts things.
+  SmokeScene('layout3d_panel', () {
+    final scene = Scene();
+    Node piece(Geometry geometry, vm.Vector4 color, {double metallic = 0.0}) =>
+        Node(
+          mesh: Mesh(
+            geometry,
+            PhysicallyBasedMaterial()
+              ..baseColorFactor = color
+              ..metallicFactor = metallic
+              ..roughnessFactor = 0.35
+              ..vertexColorWeight = 0.0,
+          ),
+        );
+
+    final unitCube = CuboidGeometry(vm.Vector3.all(1));
+    final ball = SphereGeometry(radius: 0.5);
+
+    // A piece of content sized by the layout rather than by itself: the box
+    // is fixed, and contain scales the model down into it.
+    Layout3d sized(double extent, Node content) => SizedBox3d.cube(
+      extent,
+      child: NodeBox3d(content: content, fit: BoxFit3d.contain),
+    );
+
+    final surface = Layout3dSurface(
+      constraints: Constraints3d.tight(const Size3d(1.9, 1.35, 0.36)),
+      child: Stack3d(
+        alignment: Alignment3d.center,
+        fit: StackFit3d.expand,
+        children: [
+          // The backing slab: a unit cube stretched over the plane by
+          // BoxFit3d.fill and pinned to the back face, so everything else
+          // has room to stand in front of it.
+          Positioned3d(
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            back: 0,
+            depth: 0.06,
+            child: NodeBox3d(
+              content: piece(unitCube, vm.Vector4(0.24, 0.25, 0.30, 1.0)),
+              fit: BoxFit3d.fill,
+            ),
+          ),
+          Padding3d(
+            padding: const EdgeInsets3d.symmetric(
+              horizontal: 0.15,
+              vertical: 0.13,
+            ),
+            child: Column3d(
+              mainAxisAlignment: MainAxisAlignment3d.spaceEvenly,
+              children: [
+                Row3d(
+                  mainAxisAlignment: MainAxisAlignment3d.spaceEvenly,
+                  children: [
+                    sized(
+                      0.3,
+                      piece(unitCube, vm.Vector4(0.85, 0.35, 0.25, 1)),
+                    ),
+                    sized(0.3, piece(ball, vm.Vector4(0.30, 0.62, 0.90, 1))),
+                    sized(
+                      0.3,
+                      piece(
+                        unitCube,
+                        vm.Vector4(0.95, 0.78, 0.30, 1.0),
+                        metallic: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+                // Two bars dividing the width two to one, stretched to the
+                // height the SizedBox3d fixed.
+                SizedBox3d(
+                  height: 0.18,
+                  depth: 0.08,
+                  child: Row3d(
+                    crossAxisAlignment: CrossAxisAlignment3d.stretch,
+                    depthAxisAlignment: CrossAxisAlignment3d.stretch,
+                    spacing: 0.07,
+                    children: [
+                      Expanded3d(
+                        flex: 2,
+                        child: NodeBox3d(
+                          content: piece(
+                            unitCube,
+                            vm.Vector4(0.30, 0.72, 0.55, 1.0),
+                          ),
+                          fit: BoxFit3d.fill,
+                        ),
+                      ),
+                      Expanded3d(
+                        child: NodeBox3d(
+                          content: piece(
+                            unitCube,
+                            vm.Vector4(0.55, 0.55, 0.62, 1.0),
+                          ),
+                          fit: BoxFit3d.fill,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Pinned to the top right corner, sized on every axis so it stands
+          // proud of the slab instead of sinking into it.
+          Positioned3d(
+            top: 0.06,
+            right: 0.06,
+            width: 0.2,
+            height: 0.2,
+            depth: 0.2,
+            child: NodeBox3d(
+              content: piece(ball, vm.Vector4(0.95, 0.30, 0.45, 1.0)),
+              fit: BoxFit3d.contain,
+            ),
+          ),
+        ],
+      ),
+    )..flush();
+    scene.add(surface.plane);
+    return (scene: scene, camera: _camera());
+  }),
+
+  // The same protocol on the ground plane, plus a scrolled list. Catches the
+  // other basis (layout "down" running away from the camera along the floor)
+  // and a list window that is not at offset zero.
+  SmokeScene('layout3d_ground', () {
+    final scene = Scene();
+    Node piece(Geometry geometry, vm.Vector4 color) => Node(
+      mesh: Mesh(
+        geometry,
+        PhysicallyBasedMaterial()
+          ..baseColorFactor = color
+          ..metallicFactor = 0.0
+          ..roughnessFactor = 0.4
+          ..vertexColorWeight = 0.0,
+      ),
+    );
+    final unitCube = CuboidGeometry(vm.Vector3.all(1));
+    final ball = SphereGeometry(radius: 0.5);
+    Layout3d sized(double extent, Node content) => SizedBox3d.cube(
+      extent,
+      child: NodeBox3d(content: content, fit: BoxFit3d.contain),
+    );
+
+    // Pieces of growing size along the floor, lined up on the far edge by
+    // the cross axis alignment.
+    final ground = Layout3dSurface(
+      basis: LayoutBasis3d.xz,
+      constraints: Constraints3d.tight(const Size3d(2.4, 1.0, 0.7)),
+      child: Padding3d(
+        padding: const EdgeInsets3d.symmetric(horizontal: 0.1, vertical: 0.1),
+        child: Row3d(
+          mainAxisAlignment: MainAxisAlignment3d.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment3d.end,
+          depthAxisAlignment: CrossAxisAlignment3d.start,
+          children: [
+            for (var index = 0; index < 4; index++)
+              sized(
+                0.24 + index * 0.1,
+                piece(ball, vm.Vector4(0.30 + index * 0.16, 0.55, 0.85, 1.0)),
+              ),
+          ],
+        ),
+      ),
+    )..flush();
+    ground.plane.position = vm.Vector3(0, -0.55, 0.2);
+    scene.add(ground.plane);
+
+    // A list showing the window at a non-zero scroll offset: the first item
+    // is partly above the top of the plane, and the last ones are not built
+    // into the window at all.
+    final list = Layout3dSurface(
+      constraints: Constraints3d.tight(const Size3d(0.8, 1.3, 0.3)),
+      child: ListView3d(
+        controller: Scroll3dController(initialOffset: 0.45),
+        itemExtent: 0.3,
+        spacing: 0.06,
+        children: [
+          for (var index = 0; index < 7; index++)
+            sized(
+              0.26,
+              piece(
+                index.isEven ? unitCube : ball,
+                vm.Vector4(0.9, 0.5 + (index % 3) * 0.15, 0.25, 1.0),
+              ),
+            ),
+        ],
+      ),
+    )..flush();
+    list.plane.position = vm.Vector3(1.5, 0.35, 0.4);
+    scene.add(list.plane);
+
+    return (
+      scene: scene,
+      camera: PerspectiveCamera(
+        position: vm.Vector3(-1.6, 1.9, 3.4),
+        target: vm.Vector3(0.2, 0.0, 0),
+      ),
+    );
+  }),
+
   SmokeScene('instance_attributes', () {
     final scene = Scene();
     scene.add(

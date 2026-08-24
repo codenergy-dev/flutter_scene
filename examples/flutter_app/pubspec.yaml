@@ -32,6 +32,9 @@ dependencies:
   # box3d from source through a C build hook.
   flutter_scene_box3d:
     path: ../../packages/flutter_scene_box3d
+  # 3D layout protocol, used by the Layout example.
+  flutter_scene_layout3d:
+    path: ../../packages/flutter_scene_layout3d
   hooks: ^2.0.0
   http: ^1.2.0
   # Extracts the .tar.gz of reference DICOM slices for the DICOM Volume example.

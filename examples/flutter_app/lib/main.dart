@@ -62,6 +62,7 @@ import 'example_stress_tests.dart';
 import 'example_raw_shader.dart';
 import 'example_toon.dart';
 import 'example_toon_fmat.dart';
+import 'example_layout3d.dart';
 import 'example_vertex_curve.dart';
 
 void main() {
@@ -260,6 +261,7 @@ class _MyAppState extends State<MyApp> {
       'DICOM Volume': (context) => const ExampleDicom(),
       'Custom Skybox': (context) => const ExampleSkybox(),
       'Audio': (context) => const ExampleAudio(),
+      'Layout': (context) => const ExampleLayout3d(),
       'Widget Texture': (context) => const ExampleWidgetTexture(),
       'Widget Input (inset view)': (context) => const ExampleWidgetInset(),
       'External Texture': (context) => const ExampleExternalTexture(),
