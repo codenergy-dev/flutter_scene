@@ -2039,6 +2039,91 @@ final List<SmokeScene> kSmokeScenes = <SmokeScene>[
     );
   }),
 
+  // The sliver protocol: a header, a grid and a list on one scroll position,
+  // shown at an offset where all three are in the window at once. Catches a
+  // viewport that stops handing sections the right window, and a section that
+  // forgets it is not at the top of the scroll.
+  SmokeScene('layout3d_slivers', () {
+    final scene = Scene();
+    Node piece(Geometry geometry, vm.Vector4 color) => Node(
+      mesh: Mesh(
+        geometry,
+        PhysicallyBasedMaterial()
+          ..baseColorFactor = color
+          ..metallicFactor = 0.0
+          ..roughnessFactor = 0.4
+          ..vertexColorWeight = 0.0,
+      ),
+    );
+    final unitCube = CuboidGeometry(vm.Vector3.all(1));
+    final ball = SphereGeometry(radius: 0.5);
+    Layout3d fitted(Node content) =>
+        NodeBox3d(content: content, fit: BoxFit3d.contain);
+
+    final surface = Layout3dSurface(
+      constraints: Constraints3d.tight(const Size3d(1.5, 1.5, 0.3)),
+      child: CustomScrollView3d(
+        // Scrolled past half the 0.4 header, which leaves all three sections
+        // in the window at once: the header's remainder, the whole grid, and
+        // the start of the list, all on one offset.
+        controller: Scroll3dController(initialOffset: 0.25),
+        slivers: [
+          // A wide bar standing in for a header.
+          SliverToBoxAdapter3d(
+            child: SizedBox3d(
+              height: 0.4,
+              child: NodeBox3d(
+                content: piece(unitCube, vm.Vector4(0.30, 0.72, 0.55, 1.0)),
+                fit: BoxFit3d.fill,
+              ),
+            ),
+          ),
+          SliverGrid3d(
+            gridDelegate: const Grid3dDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 0.05,
+              mainAxisSpacing: 0.05,
+            ),
+            children: [
+              for (var index = 0; index < 6; index++)
+                fitted(
+                  piece(
+                    index.isEven ? ball : unitCube,
+                    vm.Vector4(0.35, 0.55 + (index % 3) * 0.12, 0.9, 1.0),
+                  ),
+                ),
+            ],
+          ),
+          SliverList3d(
+            itemExtent: 0.3,
+            spacing: 0.05,
+            children: [
+              for (var index = 0; index < 6; index++)
+                SizedBox3d.cube(
+                  0.26,
+                  child: fitted(
+                    piece(
+                      index.isEven ? unitCube : ball,
+                      vm.Vector4(0.95, 0.5 + (index % 3) * 0.15, 0.30, 1.0),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    )..flush();
+    scene.add(surface.plane);
+
+    return (
+      scene: scene,
+      camera: PerspectiveCamera(
+        position: vm.Vector3(0, 0.1, 2.6),
+        target: vm.Vector3(0, 0, 0),
+      ),
+    );
+  }),
+
   SmokeScene('instance_attributes', () {
     final scene = Scene();
     scene.add(
