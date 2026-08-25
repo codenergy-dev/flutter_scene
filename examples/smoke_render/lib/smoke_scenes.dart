@@ -2124,6 +2124,102 @@ final List<SmokeScene> kSmokeScenes = <SmokeScene>[
     );
   }),
 
+  // Intrinsic sizing and baselines. The three bars are 0.5, 1.1 and 0.7 wide
+  // on their own; inside an IntrinsicWidth3d they all come out at 1.1, the
+  // width the middle one measured from its own geometry. Below them, three
+  // pieces of different heights hang from one line, so their feet coincide
+  // and their tops do not. Catches a measurement that reads the content's
+  // bounds in the wrong basis (the column would come out the wrong width, or
+  // collapse to nothing) and a baseline that is applied to the wrong axis.
+  SmokeScene('layout3d_intrinsic', () {
+    final scene = Scene();
+    Node piece(Geometry geometry, vm.Vector4 color) => Node(
+      mesh: Mesh(
+        geometry,
+        PhysicallyBasedMaterial()
+          ..baseColorFactor = color
+          ..metallicFactor = 0.0
+          ..roughnessFactor = 0.4
+          ..vertexColorWeight = 0.0,
+      ),
+    );
+    final unitCube = CuboidGeometry(vm.Vector3.all(1));
+
+    Layout3d bar(double width, vm.Vector4 color) => SizedBox3d(
+      width: width,
+      height: 0.2,
+      child: NodeBox3d(content: piece(unitCube, color), fit: BoxFit3d.fill),
+    );
+
+    final surface = Layout3dSurface(
+      // Unbounded across, so the width is the intrinsic box's to decide.
+      constraints: const Constraints3d(maxHeight: 1.6, maxDepth: 0.3),
+      child: Column3d(
+        mainAxisSize: MainAxisSize3d.min,
+        spacing: 0.12,
+        children: [
+          IntrinsicWidth3d(
+            child: Column3d(
+              mainAxisSize: MainAxisSize3d.min,
+              crossAxisAlignment: CrossAxisAlignment3d.stretch,
+              spacing: 0.06,
+              children: [
+                bar(0.5, vm.Vector4(0.35, 0.62, 0.92, 1.0)),
+                // No fixed width: this one is measured from its geometry, and
+                // it is the widest, so it sets the width of all three.
+                NodeBox3d(
+                  content: piece(
+                    CuboidGeometry(vm.Vector3(1.1, 0.2, 0.12)),
+                    vm.Vector4(0.30, 0.75, 0.58, 1.0),
+                  ),
+                  fit: BoxFit3d.fill,
+                ),
+                bar(0.7, vm.Vector4(0.95, 0.62, 0.32, 1.0)),
+              ],
+            ),
+          ),
+          Row3d(
+            mainAxisSize: MainAxisSize3d.min,
+            crossAxisAlignment: CrossAxisAlignment3d.baseline,
+            spacing: 0.08,
+            children: [
+              for (final (index, height) in <double>[
+                0.5,
+                0.3,
+                0.42,
+              ].indexed)
+                Baseline3d(
+                  // Below every piece's own extent, so each one hangs from
+                  // the line rather than standing out above its own box.
+                  baseline: 0.55,
+                  child: SizedBox3d(
+                    width: 0.22,
+                    height: height,
+                    child: NodeBox3d(
+                      content: piece(
+                        unitCube,
+                        vm.Vector4(0.85, 0.45 + index * 0.12, 0.85, 1.0),
+                      ),
+                      fit: BoxFit3d.fill,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    )..flush();
+    scene.add(surface.plane);
+
+    return (
+      scene: scene,
+      camera: PerspectiveCamera(
+        position: vm.Vector3(0, 0.1, 2.4),
+        target: vm.Vector3(0, 0, 0),
+      ),
+    );
+  }),
+
   SmokeScene('instance_attributes', () {
     final scene = Scene();
     scene.add(
