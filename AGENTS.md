@@ -1,6 +1,6 @@
 # Using flutter_scene
 
-This repository is the **flutter_scene** realtime 3D engine for Flutter, plus the packages built around it. This file orients coding agents, and the people directing them, toward using these packages correctly. It is about *using* the engine, not developing it.
+This repository is the **flutter_scene** realtime 3D engine for Flutter, plus the packages built around it. This file orients coding agents, and the people directing them, toward using these packages correctly. Most of it is about *using* the engine; "Working conventions" near the end is about working in this repository.
 
 flutter_scene diverges from three.js, Godot, and Unity in specific ways, and most first-attempt failures come from reaching for another engine's spelling. The rules below are the ones that are always true and expensive to get wrong. For deep, on-demand guidance, install the agent skill this repo ships (see "The agent skill"). For prose docs and live demos, see https://fscene.dev.
 
@@ -79,9 +79,72 @@ Either path installs the same skills.
 - `examples/smoke_render` is a headless cross-backend render harness and commits its scaffolding, so it runs straight from a checkout.
 - `apps/flutter_scene_editor_app` is the standalone editor.
 
+## Working conventions
+
+### Implementation plans live in `plans/`
+
+Any piece of work worth planning before writing gets a plan file under the
+`plans/` directory **of the package or app it belongs to**, not at the repository
+root: `packages/flutter_scene_layout3d/plans/`,
+`apps/flutter_scene_editor_app/plans/`, and so on. Create the directory if it is
+not there yet.
+
+Name the file `YYYY_MM_DD_plan_title.md`, dated the day the plan is written, with
+a lowercase snake_case title that says what the work is
+(`2026_08_25_layout3d_review_remediation.md`).
+
+Every plan opens with YAML front matter:
+
+```yaml
+---
+status: pending          # pending | in progress | completed | blocked
+reason: ...              # only when status is blocked: what is blocking it, briefly
+created_at: 2026-08-25T03:32:15Z   # ISO 8601
+updated_at: 2026-08-25T03:32:15Z   # ISO 8601
+commit: 495b1ec4e93e3588c93612ef02862355d380933a   # HEAD when the plan was written
+---
+```
+
+Omit `reason` unless the status is `blocked`. The `commit` field is the commit
+the plan was written against, so a later reader can tell what the codebase looked
+like when it was reasoned about; it does not change as the plan is worked.
+
+**A plan is a living document.** Update it as you implement: move `status`
+along, revise `updated_at` on every edit, tick items off, and write down what
+turned out to be wrong about the original reasoning. A plan left at `pending`
+after the work has shipped is worse than no plan, because the next reader trusts
+it.
+
+### Suggest a commit message each round
+
+At the end of every round of work, propose a commit message for what changed and
+let the user commit. Do not commit or push unless asked. If nothing changed —
+a review, a question answered — say so instead of inventing a message.
+
+### README files are written for humans
+
+Every `README.md` in this repository is documentation a person reads, not a
+generated API listing. That means:
+
+- **Natural prose.** Explain the thing, in order, the way you would to a
+  colleague. Not a wall of headings with one line under each.
+- **Not exhaustive.** A README covers what a reader needs to get going and the
+  handful of traps that cost real time. Everything else belongs in dartdoc on
+  the API itself, where it is next to the code and cannot drift as easily.
+- **Worked examples.** Show code that runs, in the order a caller writes it.
+  Prefer one example that does something real over five fragments.
+- **Didactic.** Say *why* a rule exists, not only what it is. A reader who
+  understands the reason can extrapolate to the case you did not cover.
+- **Faithful to what is actually implemented.** This is the hard requirement.
+  Never document a feature that does not exist, a behaviour the code does not
+  have, or a roadmap item as though it had landed. When you change behaviour,
+  the README changes in the same pass; when you find the README describing
+  something the code no longer does, fix it or say so.
+
 ## Where to look
 
 - The skill above for correct-usage depth.
 - The package README under `packages/flutter_scene/` for the getting-started walkthrough.
+- `plans/` inside a package for work that is planned, under way, or was recently finished there.
 - `MATERIALS.md` for the custom-shader output contract.
 - https://fscene.dev for guides and live demos.
